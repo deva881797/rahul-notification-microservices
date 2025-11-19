@@ -30,6 +30,14 @@ public class UserService {
         return userMapper.toResponse(saved);
     }
 
+    public UserResponse getUsername(String username) {
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return userMapper.toResponse(user);
+    }
+
     public UserResponse updateUser(UUID id, UserRequest request) {
 
         User existing = userRepository.findById(id)
