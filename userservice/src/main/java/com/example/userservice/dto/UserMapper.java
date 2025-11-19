@@ -3,6 +3,8 @@ package com.example.userservice.dto;
 import com.example.userservice.entity.User;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+
 @Component
 public class UserMapper {
     public User toEntity(UserRequest dto) {
@@ -10,6 +12,7 @@ public class UserMapper {
         user.setUsername(dto.getUsername());
         user.setEmail(dto.getEmail());
         user.setPassword(dto.getPassword());
+        user.setCreated_at(LocalDateTime.now());
         return user;
     }
 

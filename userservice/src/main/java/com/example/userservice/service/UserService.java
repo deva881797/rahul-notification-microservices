@@ -30,7 +30,7 @@ public class UserService {
         return userMapper.toResponse(saved);
     }
 
-    public UserResponse getUsername(String username) {
+    public UserResponse getByUsername(String username) {
 
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -43,19 +43,29 @@ public class UserService {
         User existing = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        existing.setUsername(request.getUsername());
-        existing.setEmail(request.getEmail());
-        existing.setPassword(request.getPassword());
+        if (request.getUsername() != null) {
+            existing.setUsername(request.getUsername());
+        }
+        if (request.getEmail() != null) {
+            existing.setEmail(request.getEmail());
+        }
+        if (request.getPassword() != null) {
+            existing.setPassword(request.getPassword());
+        }
+
         existing.setUpdated_at(LocalDateTime.now());
+
         User saved = userRepository.save(existing);
 
         return userMapper.toResponse(saved);
     }
 
-    public void deleteUser(UUID id) {
+    public String deleteUser(UUID id) {
         if (!userRepository.existsById(id)) {
             throw new RuntimeException("User not found");
         }
         userRepository.deleteById(id);
+
+        return "User is deleted";
     }
 }

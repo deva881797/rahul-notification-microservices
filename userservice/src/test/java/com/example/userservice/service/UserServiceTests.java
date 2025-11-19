@@ -99,7 +99,7 @@ public class UserServiceTests {
                 .thenReturn(mockResponse);
 
         // ---- CALL SERVICE ----
-        UserResponse result = userService.getUsername(username);
+        UserResponse result = userService.getByUsername(username);
 
         // ---- ASSERT ----
         assertNotNull(result);
