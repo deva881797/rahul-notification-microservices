@@ -2,11 +2,13 @@ package com.example.notificationsevice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 @SpringBootApplication
-public class NotificationseviceApplication {
+@EnableDiscoveryClient
+public class NotificationserviceApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(NotificationseviceApplication.class, args);
+		SpringApplication.run(NotificationserviceApplication.class, args);
 	}
 }
