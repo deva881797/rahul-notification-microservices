@@ -19,7 +19,7 @@ public class NotificationController {
     @PostMapping("/otp")
     public ResponseEntity<String> sendOtp(@RequestBody OtpRequest request) {
         String message = "Your OTP for " + request.getPurpose() + " is: " + request.getOtp();
-        emailService.sendEmail(request.getPhoneOrEmail(), "Your OTP", message);
+        emailService.sendEmail(request.getEmail(), request.getOtp(), message);
         return ResponseEntity.ok("OTP sent successfully");
     }
 

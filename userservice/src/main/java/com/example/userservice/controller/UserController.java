@@ -2,6 +2,8 @@ package com.example.userservice.controller;
 
 import com.example.userservice.dto.UserRequest;
 import com.example.userservice.dto.UserResponse;
+import com.example.userservice.dto.VerifyOtpRequest;
+import com.example.userservice.service.OtpService;
 import com.example.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,11 +17,17 @@ import java.util.UUID;
 @RequestMapping("/user")
 public class UserController {
     private final UserService userService;
+    private final OtpService otpService;
 
-    @PostMapping("/create")
-    public ResponseEntity<UserResponse> createUser(@RequestBody UserRequest request){
-        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(request));
+    @PostMapping("/send-otp")
+    public ResponseEntity<String> sendOtp(@RequestBody UserRequest userRequest) {
+        return ResponseEntity.ok(userService.sendOtp(userRequest));
     }
+    @PostMapping("/verify-otp")
+    public ResponseEntity<String> verifyOtp(@RequestBody VerifyOtpRequest request) {
+        return ResponseEntity.ok(userService.verifyOtpAndRegister(request));
+    }
+
     @GetMapping("/{username}")
     public ResponseEntity<UserResponse> getUser(@PathVariable String username){
         return ResponseEntity.ok(userService.getByUsername(username));
@@ -35,4 +43,10 @@ public class UserController {
     public ResponseEntity<String> removeUser(@PathVariable UUID id){
         return ResponseEntity.ok(userService.deleteUser(id));
     }
+
+    @GetMapping("/api/users/check-username")
+    public ResponseEntity<Boolean> isUsernameAvailable(@RequestParam String username) {
+        return ResponseEntity.ok(userService.isUsernameAvailable(username));
+    }
+
 }

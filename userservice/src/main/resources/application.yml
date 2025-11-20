@@ -1,5 +1,6 @@
 server:
   port: 8081
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/notification_app_users
@@ -12,6 +13,10 @@ spring:
     show-sql: true
   application:
     name: USER-SERVICE
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 eureka:
   instance:
