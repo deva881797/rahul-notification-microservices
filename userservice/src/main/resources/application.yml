@@ -49,3 +49,9 @@ resilience4j:
       retry-exceptions:
           - java.io.IOException
           - feign.FeignException
+  ratelimiter:
+    instances:
+      notificationRateLimiter:
+        limitForPeriod: 5      # max 5 calls
+        limitRefreshPeriod: 10s # refresh every 10 seconds
+        timeoutDuration: 0     # do not wait, fail immediately if limit exceeded
