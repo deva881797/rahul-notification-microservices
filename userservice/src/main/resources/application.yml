@@ -1,6 +1,5 @@
 server:
   port: 8081
-
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/notification_app_users
@@ -17,12 +16,5 @@ spring:
     redis:
       host: localhost
       port: 6379
-
-eureka:
-  instance:
-    prefer-ip-address: true
-  client:
-    register-with-eureka: true
-    fetch-registry: true
-    service-url:
-      defaultZone: http://localhost:8761/eureka
+  config:
+    import: "optional:configserver:http://localhost:8888"
