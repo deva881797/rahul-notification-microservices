@@ -1,0 +1,13 @@
+resilience4j:
+  circuitbreaker:
+    instances:
+      notificationBreaker:
+        enabled: false
+  ratelimiter:
+    instances:
+      notificationRateLimiter:
+        enabled: false
+  retry:
+    instances:
+      notificationRetry:
+        enabled: false
