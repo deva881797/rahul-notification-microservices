@@ -6,7 +6,6 @@ import com.example.userservice.dto.VerifyOtpRequest;
 import com.example.userservice.service.OtpService;
 import com.example.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +18,10 @@ public class UserController {
     private final UserService userService;
     private final OtpService otpService;
 
+    @GetMapping("/")
+    public ResponseEntity<String> greeting(){
+        return ResponseEntity.ok("hello thank you for review");
+    }
     @PostMapping("/send-otp")
     public ResponseEntity<String> sendOtp(@RequestBody UserRequest userRequest) {
         return ResponseEntity.ok(userService.sendOtp(userRequest));

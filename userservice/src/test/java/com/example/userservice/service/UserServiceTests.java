@@ -1,8 +1,12 @@
 package com.example.userservice.service;
 
+import static org.hamcrest.Matchers.is;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
-
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.userservice.dto.*;
 import com.example.userservice.entity.User;
@@ -14,6 +18,10 @@ import org.mockito.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 public class UserServiceTests {
@@ -27,6 +35,7 @@ public class UserServiceTests {
     @Mock private ObjectMapper objectMapper;
     @Mock private ValueOperations<String, String> valueOperations;
     @InjectMocks private UserService userService;
+    @Mock private MockMvc mockMvc;
 
     @BeforeEach
     void setup() {
@@ -124,6 +133,93 @@ public class UserServiceTests {
         when(userRepository.save(any(User.class))).thenReturn(user);
         String result = userService.verifyOtpAndRegister(req);
         assertEquals("User registered successfully", result);
+    }
+
+    @Test
+    public void testGetUserByUsername() throws Exception {
+        // fake user entity
+        User entity = new User();
+        entity.setUsername("veer");
+        entity.setEmail("john@example.com");
+
+        // fake response DTO
+        UserResponse response = new UserResponse();
+        response.setUsername("veer");
+        response.setEmail("john@example.com");
+
+        // mocking repository + mapper
+        Mockito.when(userRepository.findByUsername("veer"))
+                .thenReturn(Optional.of(entity));
+
+        Mockito.when(userMapper.toResponse(entity))
+                .thenReturn(response);
+
+        // call the method
+        UserResponse result = userService.getByUsername("veer");
+
+        // assertions
+        assertEquals("veer", result.getUsername());
+        assertEquals("john@example.com", result.getEmail());
+    }
+
+    @Test
+    void testUpdateUser() {
+        UUID id = UUID.randomUUID();
+
+        // Existing user in DB
+        User existing = new User();
+        existing.setUsername("oldUser");
+        existing.setEmail("old@example.com");
+        existing.setPassword("oldpass");
+
+        // Incoming update request
+        UserRequest request = new UserRequest();
+        request.setUsername("newUser");
+        request.setEmail("new@example.com");
+        request.setPassword("newpass");
+
+        // User after update
+        User updated = new User();
+        updated.setUsername("newUser");
+        updated.setEmail("new@example.com");
+        updated.setPassword("encodedPassword"); // encoded
+        updated.setUpdated_at(LocalDateTime.now());
+
+        // Response DTO
+        UserResponse response = new UserResponse();
+        response.setUsername("newUser");
+        response.setEmail("new@example.com");
+
+        // Mocks
+        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(passwordEncoder.encode("newpass")).thenReturn("encodedPassword");
+        when(userRepository.save(existing)).thenReturn(updated);
+        when(userMapper.toResponse(updated)).thenReturn(response);
+
+        // Call service
+        UserResponse result = userService.updateUser(id, request);
+
+        // Verify changes
+        assertEquals("newUser", result.getUsername());
+        assertEquals("new@example.com", result.getEmail());
+        assertEquals("encodedPassword", existing.getPassword());
+
+        verify(userRepository).findById(id);
+        verify(userRepository).save(existing);
+    }
+
+    @Test
+    void testDeleteUser() {
+        UUID id = UUID.randomUUID();
+
+        when(userRepository.existsById(id)).thenReturn(true);
+
+        String result = userService.deleteUser(id);
+
+        assertEquals("User is deleted", result);
+
+        verify(userRepository).existsById(id);
+        verify(userRepository).deleteById(id);
     }
 
 }
