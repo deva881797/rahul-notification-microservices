@@ -26,6 +26,7 @@ public class UserController {
     public ResponseEntity<String> sendOtp(@RequestBody UserRequest userRequest) {
         return ResponseEntity.ok(userService.sendOtp(userRequest));
     }
+
     @PostMapping("/verify-otp")
     public ResponseEntity<String> verifyOtp(@RequestBody VerifyOtpRequest request) {
         return ResponseEntity.ok(userService.verifyOtpAndRegister(request));

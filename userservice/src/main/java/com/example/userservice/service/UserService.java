@@ -6,9 +6,13 @@ import com.example.userservice.external.service.NotificationService;
 import com.example.userservice.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,33 +34,31 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final RedisTemplate<String,String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final NotificationCaller notificationCaller;
 
 
-    public String sendOtp(UserRequest request){
-        if (userRepository.existsByEmail(request.getEmail())){
-            throw new IllegalArgumentException("Email already exists");
-        }
-        if (userRepository.existsByUsername(request.getUsername())){
-            throw new IllegalArgumentException("Username already taken");
-        }
+    public String sendOtp(UserRequest request) {
+        // Validate early, throw IllegalArgumentException for bad input
         if (request.getEmail() == null || request.getEmail().isBlank()) {
             throw new IllegalArgumentException("Email must not be empty");
         }
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already exists");
-        }
         if (request.getUsername() == null || request.getUsername().isBlank()) {
             throw new IllegalArgumentException("Username must not be empty");
+        }
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new IllegalArgumentException("Username must not be empty");
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Email already exists");
         }
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Username already taken");
         }
 
-        // Store the *unsaved* user object in Redis until OTP is verified.
+        // Store unsaved user temporarily in Redis
         UserRequest safe = new UserRequest();
         safe.setEmail(request.getEmail());
         safe.setUsername(request.getUsername());
-        // encode password before storing temporarily
         if (request.getPassword() != null) {
             safe.setPassword(passwordEncoder.encode(request.getPassword()));
         }
@@ -68,15 +70,12 @@ public class UserService {
             throw new RuntimeException("Internal error storing temp user", e);
         }
 
-        // generate OTP and send
         String otp = otpService.generateOtp(request.getEmail());
         OtpSendRequest otpReq = new OtpSendRequest(request.getEmail(), otp, "Registration");
-        System.out.println("Sending OTP " + otp + " to email " + request.getEmail());
 
-        notificationClient.sendOtp(otpReq);
-
-        return "OTP sent. Complete verification to register.";
+        return notificationCaller.sendOtp(otpReq);
     }
+    //
 
     /**
      * Step 2: verify OTP and register using temp user stored in Redis
