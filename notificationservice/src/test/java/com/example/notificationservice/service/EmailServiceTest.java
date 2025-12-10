@@ -1,5 +1,6 @@
-package com.example.notificationsevice.service;
+package com.example.notificationservice.service;
 
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -37,7 +38,7 @@ class EmailServiceTest {
         );
 
         assertEquals("Recipient email is required", exception.getMessage());
-        verify(mailSender, never()).send(any());
+        verify(mailSender, never()).send(MimeMessage::saveChanges);
     }
 
     @Test

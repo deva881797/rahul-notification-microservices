@@ -1,4 +1,4 @@
-package com.example.notificationsevice.service;
+package com.example.notificationservice.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
