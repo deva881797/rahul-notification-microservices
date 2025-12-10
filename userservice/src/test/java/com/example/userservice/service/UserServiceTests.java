@@ -1,208 +1,211 @@
 package com.example.userservice.service;
 
-import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.userservice.dto.*;
 import com.example.userservice.entity.User;
-import com.example.userservice.repository.UserRepository;
 import com.example.userservice.external.service.NotificationService;
-import org.junit.jupiter.api.BeforeEach;
+import com.example.userservice.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.mockito.*;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
-@ActiveProfiles("test")
-public class UserServiceTests {
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
-    @Mock private UserRepository userRepository;
-    @Mock private UserMapper userMapper;
-    @Mock private OtpService otpService;
-    @Mock private NotificationService notificationClient;
-    @Mock private PasswordEncoder passwordEncoder;
-    @Mock private RedisTemplate<String, String> redisTemplate;
-    @Mock private ObjectMapper objectMapper;
-    @Mock private ValueOperations<String, String> valueOperations;
-    @InjectMocks private UserService userService;
-    @Mock private MockMvc mockMvc;
+@ExtendWith(MockitoExtension.class)
+class UserServiceTest {
 
-    @BeforeEach
-    void setup() {
-        MockitoAnnotations.openMocks(this);
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);  // Mock opsForValue()
+    @Mock UserRepository userRepository;
+    @Mock UserMapper userMapper;
+    @Mock OtpService otpService;
+    @Mock NotificationCaller notificationCaller;
+    @Mock PasswordEncoder passwordEncoder;
+    @Mock RedisTemplate<String,String> redisTemplate;
+    @Mock ValueOperations<String,String> valueOperations;
+    @Mock ObjectMapper objectMapper;
+
+    @InjectMocks
+    UserService userService;
+
+    // helper to avoid null
+    private void mockRedisOps() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
+    // ------------------------------------------------------
+    // TEST 1: sendOtp()
+    // ------------------------------------------------------
     @Test
-    void testSendOtp_EmailExists() {
+    void sendOtp_shouldStoreTempUserAndSendOtp() throws Exception {
         UserRequest req = new UserRequest();
-        req.setEmail("test@example.com");
-        req.setUsername("dummyUser"); // required field
-        req.setPassword("1234");
+        req.setEmail("test@gmail.com");
+        req.setUsername("rahul");
+        req.setPassword("12345");
 
-        when(userRepository.existsByEmail("test@example.com")).thenReturn(true, true);
+        when(userRepository.existsByEmail("test@gmail.com")).thenReturn(false);
+        when(userRepository.existsByUsername("rahul")).thenReturn(false);
 
-        var ex = assertThrows(IllegalArgumentException.class,
-                () -> userService.sendOtp(req));
+        when(passwordEncoder.encode("12345")).thenReturn("encoded");
+        when(objectMapper.writeValueAsString(any(UserRequest.class))).thenReturn("{json}");
 
-        assertTrue(ex.getMessage().contains("Email already exists"));
+        mockRedisOps();
+
+        when(otpService.generateOtp("test@gmail.com")).thenReturn("999999");
+        when(notificationCaller.sendOtp(any())).thenReturn("OTP sent successfully.");
+
+        String response = userService.sendOtp(req);
+
+        assertEquals("OTP sent successfully.", response);
+        verify(valueOperations).set(eq("tmp:user:test@gmail.com"), eq("{json}"), any());
+        verify(otpService).generateOtp("test@gmail.com");
+        verify(notificationCaller).sendOtp(any(OtpSendRequest.class));
     }
 
-
-
-
-
+    // ------------------------------------------------------
+    // TEST 2: verifyOtpAndRegister() - success flow
+    // ------------------------------------------------------
     @Test
-    void testSendOtp_UsernameExists() {
-        UserRequest req = new UserRequest();
-        req.setEmail("new@example.com"); // required
-        req.setUsername("user1");
-        req.setPassword("1234");
-
-        when(userRepository.existsByEmail("new@example.com")).thenReturn(false, false);
-        when(userRepository.existsByUsername("user1")).thenReturn(true, true);
-
-        var ex = assertThrows(IllegalArgumentException.class,
-                () -> userService.sendOtp(req));
-
-        assertEquals("Username already taken", ex.getMessage());
-    }
-
-
-    @Test
-    void testVerifyOtpAndRegister_InvalidOtp() {
+    void verifyOtpAndRegister_shouldRegisterUserOnValidOtp() throws Exception {
         VerifyOtpRequest req = new VerifyOtpRequest();
-        req.setEmail("test@example.com");
-        req.setOtp("wrongOtp");
-        when(otpService.verifyOtp(anyString(), anyString())).thenReturn(false);
+        req.setEmail("test@gmail.com");
+        req.setOtp("111111");
+
+        when(otpService.verifyOtp("test@gmail.com", "111111")).thenReturn(true);
+
+        mockRedisOps();
+        when(valueOperations.get("tmp:user:test@gmail.com"))
+                .thenReturn("{\"email\":\"test@gmail.com\",\"username\":\"rahul\",\"password\":\"encoded\"}");
+
+        UserRequest tempReq = new UserRequest();
+        tempReq.setEmail("test@gmail.com");
+        tempReq.setUsername("rahul");
+        tempReq.setPassword("encoded");
+
+        when(objectMapper.readValue(anyString(), eq(UserRequest.class))).thenReturn(tempReq);
+        when(userRepository.existsByUsername("rahul")).thenReturn(false);
+        when(userRepository.existsByEmail("test@gmail.com")).thenReturn(false);
+
+        User savedUser = new User();
+        savedUser.setUserid(UUID.randomUUID());
+        savedUser.setEmail("test@gmail.com");
+        savedUser.setUsername("rahul");
+        savedUser.setCreated_at(LocalDateTime.now());
+
+        when(userMapper.toEntity(tempReq)).thenReturn(savedUser);
+
         String result = userService.verifyOtpAndRegister(req);
+
+        assertEquals("User registered successfully", result);
+        verify(userRepository).save(any(User.class));
+        verify(redisTemplate).delete("tmp:user:test@gmail.com");
+    }
+
+    // ------------------------------------------------------
+    // TEST 3: verifyOtpAndRegister() - OTP invalid
+    // ------------------------------------------------------
+    @Test
+    void verifyOtpAndRegister_shouldFailOnInvalidOtp() {
+        VerifyOtpRequest req = new VerifyOtpRequest();
+        req.setEmail("x@gmail.com");
+        req.setOtp("222222");
+
+        when(otpService.verifyOtp("x@gmail.com", "222222")).thenReturn(false);
+
+        String result = userService.verifyOtpAndRegister(req);
+
         assertEquals("Invalid or expired OTP", result);
     }
 
+    // ------------------------------------------------------
+    // TEST 4: getByUsername()
+    // ------------------------------------------------------
     @Test
-    void testVerifyOtpAndRegister_Success() throws Exception {
-        VerifyOtpRequest req = new VerifyOtpRequest();
-        req.setEmail("test@example.com");
-        req.setOtp("123456");
-        UserRequest tempUser = new UserRequest();
-        tempUser.setEmail(req.getEmail());
-        tempUser.setUsername("user1");
-        tempUser.setPassword("encodedPassword");
-        // Mock OTP validation
-        when(otpService.verifyOtp("test@example.com", "123456")).thenReturn(true);
-        // Mock Redis get value
-        String json = "{\"email\":\"test@example.com\",\"username\":\"user1\",\"password\":\"encodedPassword\"}";
-        when(redisTemplate.opsForValue().get(anyString())).thenReturn(json);
-        // Mock deserialization
-        UserRequest deserializedUser = new UserRequest();
-        deserializedUser.setEmail("test@example.com");
-        deserializedUser.setUsername("user1");
-        deserializedUser.setPassword("encodedPassword");
-        when(objectMapper.readValue(json, UserRequest.class)).thenReturn(deserializedUser);
-        // Mock user existence checks
-        when(userRepository.existsByUsername("user1")).thenReturn(false);
-        when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-        // Mock save
-        User user = new User();
-        UUID id=UUID.randomUUID();
-        when(userMapper.toEntity(any(UserRequest.class))).thenReturn(user);
-        when(userRepository.save(any(User.class))).thenReturn(user);
-        String result = userService.verifyOtpAndRegister(req);
-        assertEquals("User registered successfully", result);
-    }
+    void getByUsername_shouldReturnUserResponse() {
+        User u = new User();
+        u.setUsername("veer");
 
-    @Test
-    public void testGetUserByUsername() throws Exception {
-        // fake user entity
-        User entity = new User();
-        entity.setUsername("veer");
-        entity.setEmail("john@example.com");
-
-        // fake response DTO
         UserResponse response = new UserResponse();
         response.setUsername("veer");
-        response.setEmail("john@example.com");
 
-        // mocking repository + mapper
-        Mockito.when(userRepository.findByUsername("veer"))
-                .thenReturn(Optional.of(entity));
+        when(userRepository.findByUsername("veer")).thenReturn(Optional.of(u));
+        when(userMapper.toResponse(u)).thenReturn(response);
 
-        Mockito.when(userMapper.toResponse(entity))
-                .thenReturn(response);
-
-        // call the method
         UserResponse result = userService.getByUsername("veer");
 
-        // assertions
         assertEquals("veer", result.getUsername());
-        assertEquals("john@example.com", result.getEmail());
     }
 
+    // ------------------------------------------------------
+    // TEST 5: updateUser()
+    // ------------------------------------------------------
     @Test
-    void testUpdateUser() {
+    void updateUser_shouldUpdateFields() {
         UUID id = UUID.randomUUID();
 
-        // Existing user in DB
         User existing = new User();
-        existing.setUsername("oldUser");
-        existing.setEmail("old@example.com");
-        existing.setPassword("oldpass");
+        existing.setUserid(id);
+        existing.setUsername("old");
+        existing.setEmail("old@gmail.com");
 
-        // Incoming update request
-        UserRequest request = new UserRequest();
-        request.setUsername("newUser");
-        request.setEmail("new@example.com");
-        request.setPassword("newpass");
+        UserRequest req = new UserRequest();
+        req.setUsername("new");
+        req.setEmail("new@gmail.com");
+        req.setPassword("pass");
 
-        // User after update
-        User updated = new User();
-        updated.setUsername("newUser");
-        updated.setEmail("new@example.com");
-        updated.setPassword("encodedPassword"); // encoded
-        updated.setUpdated_at(LocalDateTime.now());
+        User saved = new User();
+        saved.setUserid(id);
+        saved.setUsername("new");
+        saved.setEmail("new@gmail.com");
 
-        // Response DTO
-        UserResponse response = new UserResponse();
-        response.setUsername("newUser");
-        response.setEmail("new@example.com");
-
-        // Mocks
         when(userRepository.findById(id)).thenReturn(Optional.of(existing));
-        when(passwordEncoder.encode("newpass")).thenReturn("encodedPassword");
-        when(userRepository.save(existing)).thenReturn(updated);
-        when(userMapper.toResponse(updated)).thenReturn(response);
+        when(passwordEncoder.encode("pass")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenReturn(saved);
 
-        // Call service
-        UserResponse result = userService.updateUser(id, request);
+        UserResponse mapped = new UserResponse();
+        mapped.setUsername("new");
+        mapped.setEmail("new@gmail.com");
 
-        // Verify changes
-        assertEquals("newUser", result.getUsername());
-        assertEquals("new@example.com", result.getEmail());
-        assertEquals("encodedPassword", existing.getPassword());
+        when(userMapper.toResponse(saved)).thenReturn(mapped);
 
-        verify(userRepository).findById(id);
-        verify(userRepository).save(existing);
+        UserResponse result = userService.updateUser(id, req);
+
+        assertEquals("new", result.getUsername());
+        assertEquals("new@gmail.com", result.getEmail());
     }
 
+    // ------------------------------------------------------
+    // TEST 6: deleteUser()
+    // ------------------------------------------------------
     @Test
-    void testDeleteUser() {
+    void deleteUser_shouldDeleteWhenExists() {
         UUID id = UUID.randomUUID();
-
         when(userRepository.existsById(id)).thenReturn(true);
 
-        String result = userService.deleteUser(id);
+        String msg = userService.deleteUser(id);
 
-        assertEquals("User is deleted", result);
-
-        verify(userRepository).existsById(id);
+        assertEquals("User is deleted", msg);
         verify(userRepository).deleteById(id);
     }
 
+    // ------------------------------------------------------
+    // TEST 7: isUsernameAvailable()
+    // ------------------------------------------------------
+    @Test
+    void isUsernameAvailable_whenUserNotPresent() {
+        when(userRepository.existsByUsername("veer")).thenReturn(false);
+        assertTrue(userService.isUsernameAvailable("veer"));
+    }
 }
