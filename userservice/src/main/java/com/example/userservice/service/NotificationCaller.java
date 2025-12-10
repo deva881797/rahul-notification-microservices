@@ -18,7 +18,7 @@ public class NotificationCaller {
     @CircuitBreaker(name = "notificationBreaker", fallbackMethod = "fallback")
     public String sendOtp(OtpSendRequest req) {
         notificationService.sendOtp(req);  // exception caught HERE
-        return "OTP sent successfully.";
+        return "Secure and Safe OTP sent successfully.";
     }
 
     public String fallback(OtpSendRequest req, Throwable ex) {
@@ -29,3 +29,4 @@ public class NotificationCaller {
         return "Too many requests. Please try again later.";
     }
 }
+
